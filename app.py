@@ -15,14 +15,14 @@ load_dotenv()
 
 # Configuração global da página — deve ser o PRIMEIRO comando Streamlit
 st.set_page_config(
-    page_title="Apostas N1",
+    page_title="Campeonato N1",
     page_icon="🎯",
     layout="wide",
     initial_sidebar_state="expanded",
     menu_items={
         "Get Help": None,
         "Report a bug": None,
-        "About": "Web App de Controle de Apostas — Competição Interna N1",
+        "About": "Web App de Controle — Competição Interna N1",
     },
 )
 

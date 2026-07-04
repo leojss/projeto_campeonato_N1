@@ -30,7 +30,7 @@ def render_login() -> None:
             f"""
             <div style="text-align: center; padding: 1.5rem 0 0.5rem;">
                 {logo_html}
-                <h1 style="color: #6366f1; font-size: 2.2rem; margin: 0; font-family: 'Inter', sans-serif; font-weight: 800; letter-spacing: -0.5px;">Apostas N1</h1>
+                <h1 style="color: #6366f1; font-size: 2.2rem; margin: 0; font-family: 'Inter', sans-serif; font-weight: 800; letter-spacing: -0.5px;">Campeonato N1</h1>
                 <p style="color: #94a3b8; margin-top: 0.5rem; font-size: 0.95rem;">
                     Competição Interna — Faça login para continuar
                 </p>
