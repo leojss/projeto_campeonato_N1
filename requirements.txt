@@ -1,0 +1,27 @@
+# Web App Controle de Apostas N1
+# Python 3.11+
+
+# --- Core ---
+streamlit>=1.35.0
+python-dotenv>=1.0.0
+
+# --- Supabase ---
+supabase>=2.4.0
+gotrue>=2.4.0
+storage3>=0.7.0
+
+# --- IA / Vision ---
+google-generativeai>=0.7.0
+pillow>=10.3.0
+
+# --- Validação de arquivos ---
+python-magic-bin>=0.4.14; sys_platform == "win32"
+python-magic>=0.4.27; sys_platform != "win32"
+
+# --- Utilitários de data/hora ---
+pytz>=2024.1
+
+# --- Testes ---
+pytest>=8.2.0
+pytest-mock>=3.14.0
+pytest-cov>=5.0.0
