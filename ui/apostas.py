@@ -148,11 +148,26 @@ def _render_nova_aposta() -> None:
     actor_id = st.session_state.get("user_id")
     today = get_today_br()
 
-    # --- Verifica rodada ativa ---
-    active_round = RoundService.get_active_round()
-    if not active_round:
-        st.error("⛔ Não há rodada ativa no momento. Aguarde o início da próxima semana.")
+    # --- Busca todas as rodadas para o seletor ---
+    from repositories.round_repository import RoundRepository
+    rounds_list = RoundRepository.get_all_rounds(limit=50)
+    if not rounds_list:
+        st.error("⛔ Nenhuma rodada cadastrada no sistema. Crie uma rodada no Painel Admin primeiro.")
         return
+
+    # Mapeamento para o selectbox de rodadas
+    round_options = []
+    round_map = {}
+    default_round_index = 0
+    active_round = RoundService.get_active_round()
+
+    for idx, r in enumerate(rounds_list):
+        status_label = "🟢 Aberta" if r.status == "open" else "🔴 Fechada" if r.status == "closed" else "🏁 Finalizada"
+        label = f"{r.label} ({status_label})"
+        round_options.append(label)
+        round_map[label] = r
+        if active_round and r.id == active_round.id:
+            default_round_index = idx
 
     # --- Busca Competidores para seleção pelo Admin ---
     from repositories.competitor_repository import CompetitorRepository
@@ -165,7 +180,6 @@ def _render_nova_aposta() -> None:
     comp_names = [c.display_name for c in competitors_list]
 
     st.markdown("### 🚀 Realizar Nova Aposta (Preenchimento por IA)")
-    st.caption(f"Rodada: **{active_round.label}**")
 
     with st.form("nova_aposta_form", clear_on_submit=True):
         
@@ -178,12 +192,39 @@ def _render_nova_aposta() -> None:
         )
         competitor_id = comp_map[selected_comp_name]
 
+        # Seletor de Rodada
+        selected_round_label = st.selectbox(
+            "📅 Selecione a Rodada da Aposta",
+            options=round_options,
+            index=default_round_index,
+            key="aposta_round_label",
+            help="Escolha a qual rodada esta aposta deve pertencer."
+        )
+        selected_round = round_map[selected_round_label]
+        round_id = selected_round.id
+
+        # Checkbox para forçar cadastro ignorando prazo/restrições
+        force_submission = st.checkbox(
+            "⚠️ Forçar cadastro (ignorar prazo de envio expirado)",
+            value=False,
+            key="aposta_force_submission",
+            help="Marque esta opção para permitir o cadastro desta aposta mesmo que o prazo oficial de envio já tenha passado."
+        )
+
         # --- Data de referência ---
-        min_date = today
-        max_date = active_round.end_date or (today + timedelta(days=6))
+        min_date = selected_round.start_date
+        max_date = selected_round.end_date
+        
+        # Ajusta valor padrão seguro de data para o st.date_input
+        default_date = today + timedelta(days=1)
+        if default_date < min_date:
+            default_date = min_date
+        elif default_date > max_date:
+            default_date = max_date
+
         target_date = st.date_input(
             "📅 Data de referência da aposta",
-            value=today + timedelta(days=1),
+            value=default_date,
             min_value=min_date,
             max_value=max_date,
             help="Data para a qual a aposta se refere. O upload deve ser feito até 23:59 do dia anterior.",
@@ -191,13 +232,21 @@ def _render_nova_aposta() -> None:
         )
 
         # --- Verificação de prazo em tempo real ---
-        if is_deadline_passed(target_date):
-            st.error(
-                f"⛔ Prazo expirado para {format_br_date(target_date)}. "
-                "Selecione uma data futura."
-            )
+        is_passed = is_deadline_passed(target_date)
+        bets_count = BetRepository.count_bets_today(competitor_id, target_date)
+        
+        if is_passed:
+            if force_submission:
+                st.warning(
+                    f"⚠️ Prazo oficialmente expirado para {format_br_date(target_date)}, "
+                    "mas a gravação será permitida devido à concessão (cadastro forçado ativo)."
+                )
+            else:
+                st.error(
+                    f"⛔ Prazo expirado para {format_br_date(target_date)}. "
+                    "Marque a opção 'Forçar cadastro' se houver decisão de concessão."
+                )
         else:
-            bets_count = BetRepository.count_bets_today(competitor_id, target_date)
             if bets_count >= MAX_BETS_PER_DAY:
                 st.error(
                     f"⛔ Limite diário atingido para {selected_comp_name} em {format_br_date(target_date)}: "
@@ -222,7 +271,7 @@ def _render_nova_aposta() -> None:
         )
 
         if uploaded_file:
-            st.image(uploaded_file, caption="Preview da imagem", use_container_width=True)
+            st.image(uploaded_file, caption="Preview da imagem", width="stretch")
 
         st.divider()
         submitted = st.form_submit_button(
@@ -233,12 +282,17 @@ def _render_nova_aposta() -> None:
 
     # --- Processamento pós-submit ---
     if submitted:
+        if is_deadline_passed(target_date) and not force_submission:
+            st.error("⛔ Não é possível enviar: o prazo expirou. Ative o cadastro forçado para prosseguir.")
+            return
+
         _process_bet_submission(
             competitor_id=competitor_id,
             actor_id=actor_id,
-            round_id=active_round.id,
+            round_id=round_id,
             target_date=target_date,
             uploaded_file=uploaded_file,
+            force_submission=force_submission,
         )
 
 
@@ -248,6 +302,7 @@ def _process_bet_submission(
     round_id: str,
     target_date: date,
     uploaded_file,
+    force_submission: bool = False,
 ) -> None:
     """Executa o pipeline de aposta sem digitação, extraindo tudo por IA."""
     from models.bet import Bet
@@ -263,7 +318,7 @@ def _process_bet_submission(
 
         # Passo 1: Validações básicas de prazo e limite diário (antes de rodar a IA)
         st.write("✅ Validando prazos e limites...")
-        if is_deadline_passed(target_date):
+        if is_deadline_passed(target_date) and not force_submission:
             status_container.update(label="❌ Prazo expirado", state="error")
             st.error(f"Prazo expirado para apostas na data {format_br_date(target_date)}.")
             AgentAuditoria.log_deadline_exceeded(actor_id, str(target_date))
@@ -281,7 +336,11 @@ def _process_bet_submission(
         file_content, filename, mime_type = read_streamlit_file(uploaded_file)
 
         try:
-            UploadService.validate_upload(file_content, filename, mime_type, target_date)
+            if not force_submission:
+                UploadService.validate_upload(file_content, filename, mime_type, target_date)
+            else:
+                from utils.file_utils import validate_image_file
+                validate_image_file(file_content, filename, mime_type)
         except DeadlineError as e:
             status_container.update(label="❌ Prazo expirado", state="error")
             st.error(str(e))
@@ -345,6 +404,7 @@ def _process_bet_submission(
             competitor_id,
             form_data={"target_date": target_date},
             existing_bet_id=temp_bet.id,
+            force_submission=force_submission,
         )
 
         # Passo 6: Persistência e atualização definitiva no Supabase

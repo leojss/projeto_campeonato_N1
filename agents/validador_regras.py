@@ -46,6 +46,7 @@ class AgentValidadorRegras:
         competitor_id: str,
         form_data: Optional[dict] = None,
         existing_bet_id: Optional[str] = None,
+        force_submission: bool = False,
     ) -> ValidationResult:
         """
         Executa todas as validações de regras de negócio.
@@ -55,6 +56,7 @@ class AgentValidadorRegras:
             competitor_id: ID do competidor.
             form_data: Dados originais informados no formulário (para comparação).
             existing_bet_id: ID da aposta atual em processamento a ser excluído da contagem diária.
+            force_submission: Se True, tolera o prazo expirado devido a concessões.
 
         Returns:
             ValidationResult com status e lista de erros/avisos.
@@ -65,9 +67,14 @@ class AgentValidadorRegras:
         # --- 1. Prazo de envio ---
         target_date = normalized_bet.target_date or form.get("target_date")
         if target_date and is_deadline_passed(target_date):
-            result.errors.append(
-                f"Prazo de envio expirado para {target_date.strftime('%d/%m/%Y')}."
-            )
+            if force_submission:
+                result.warnings.append(
+                    f"Concessão: Prazo de envio expirado para {target_date.strftime('%d/%m/%Y')} (Cadastro forçado pelo Administrador)."
+                )
+            else:
+                result.errors.append(
+                    f"Prazo de envio expirado para {target_date.strftime('%d/%m/%Y')}."
+                )
 
         # --- 2. Limite diário ---
         if target_date and competitor_id:
