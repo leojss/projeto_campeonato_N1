@@ -192,6 +192,7 @@ class AgentNormalizacaoAposta:
             if not isinstance(sel_data, dict):
                 continue
 
+            odd_raw = sel_data.get("odd")
             odd = None
             if odd_raw is not None:
                 try:
