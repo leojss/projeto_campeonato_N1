@@ -60,6 +60,10 @@ class SettlementService:
             justification = resolution.get("justificativa", "")
             sources = resolution.get("fontes", [])
 
+            # Delay de segurança para respeitar o limite de requisições da API Gemini
+            import time
+            time.sleep(4.0)
+
             if status != "pending":
                 # Atualiza a seleção no banco
                 update_data = {

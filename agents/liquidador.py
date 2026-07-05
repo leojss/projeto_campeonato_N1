@@ -84,56 +84,68 @@ class AgentLiquidador:
             }}
         """).strip()
 
-        try:
-            # Habilita o recurso oficial de Google Search Grounding no Gemini 3.5 Flash
-            response = self.client.models.generate_content(
-                model=GEMINI_MODEL,
-                contents=[prompt],
-                config=types.GenerateContentConfig(
-                    temperature=0.0,  # Zero para máxima factualidade e consistência
-                    tools=[types.Tool(google_search=types.GoogleSearch())]
-                )
-            )
+        import time
+        max_retries = 3
+        backoff_delay = 5.0
 
-            raw_text = response.text.strip()
-            result_json = self._parse_json(raw_text)
-
-            # Tenta pegar as fontes de pesquisa reais fornecidas pela metadata de grounding da resposta
-            sources = []
+        for attempt in range(1, max_retries + 1):
             try:
-                # O SDK google-genai traz as fontes de grounding em candidates[0].grounding_metadata
-                metadata = response.candidates[0].grounding_metadata
-                if metadata and metadata.grounding_chunks:
-                    for chunk in metadata.grounding_chunks:
-                        if chunk.web and chunk.web.uri:
-                            sources.append(chunk.web.uri)
-            except Exception:
-                pass
+                # Habilita o recurso oficial de Google Search Grounding no Gemini 3.5 Flash
+                response = self.client.models.generate_content(
+                    model=GEMINI_MODEL,
+                    contents=[prompt],
+                    config=types.GenerateContentConfig(
+                        temperature=0.0,  # Zero para máxima factualidade e consistência
+                        tools=[types.Tool(google_search=types.GoogleSearch())]
+                    )
+                )
 
-            # Mescla as fontes detectadas na metadata com as que a IA escreveu no JSON
-            json_sources = result_json.get("fontes", [])
-            if isinstance(json_sources, list):
-                sources.extend(json_sources)
-            
-            # Remove duplicados
-            sources = list(set(sources))
-            result_json["fontes"] = sources[:5]  # Limita a 5 fontes principais
+                raw_text = response.text.strip()
+                result_json = self._parse_json(raw_text)
 
-            # Garante que o status retornado seja válido
-            valid_statuses = ["won", "lost", "void", "pending"]
-            status = result_json.get("result_status", "pending").lower()
-            if status not in valid_statuses:
-                status = "pending"
-            result_json["result_status"] = status
+                # Tenta pegar as fontes de pesquisa reais fornecidas pela metadata de grounding da resposta
+                sources = []
+                try:
+                    # O SDK google-genai traz as fontes de grounding em candidates[0].grounding_metadata
+                    metadata = response.candidates[0].grounding_metadata
+                    if metadata and metadata.grounding_chunks:
+                        for chunk in metadata.grounding_chunks:
+                            if chunk.web and chunk.web.uri:
+                                sources.append(chunk.web.uri)
+                except Exception:
+                    pass
 
-            return result_json
+                # Mescla as fontes detectadas na metadata com as que a IA escreveu no JSON
+                json_sources = result_json.get("fontes", [])
+                if isinstance(json_sources, list):
+                    sources.extend(json_sources)
+                
+                # Remove duplicados
+                sources = list(set(sources))
+                result_json["fontes"] = sources[:5]  # Limita a 5 fontes principais
 
-        except Exception as e:
-            return {
-                "result_status": "pending",
-                "justificativa": f"Erro interno ao chamar resolvedor de IA: {e}",
-                "fontes": []
-            }
+                # Garante que o status retornado seja válido
+                valid_statuses = ["won", "lost", "void", "pending"]
+                status = result_json.get("result_status", "pending").lower()
+                if status not in valid_statuses:
+                    status = "pending"
+                result_json["result_status"] = status
+
+                return result_json
+
+            except Exception as e:
+                error_msg = str(e)
+                # Se for erro de quota/rate limit (429 ou RESOURCE_EXHAUSTED) e houver tentativas restantes, aguarda
+                if ("429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg or "quota" in error_msg.lower()) and attempt < max_retries:
+                    time.sleep(backoff_delay)
+                    backoff_delay *= 2.0  # Dobra o delay
+                    continue
+                else:
+                    return {
+                        "result_status": "pending",
+                        "justificativa": f"Erro interno ao chamar resolvedor de IA: {e}",
+                        "fontes": []
+                    }
 
     def _parse_json(self, raw_text: str) -> dict:
         """Extrai JSON da resposta tratando eventuais markdowns."""
