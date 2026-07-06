@@ -248,6 +248,18 @@ def _render_liquidacao() -> None:
                     f"Seleções resolvidas: {results['selections_resolved']} | "
                     f"Apostas liquidadas: {results['bets_settled']}"
                 )
+
+                # Verifica se houve estouro de cota nos logs detalhados
+                quota_error = any("429" in str(log_msg) or "RESOURCE_EXHAUSTED" in str(log_msg) for log_msg in results["logs"])
+                if quota_error and results["selections_resolved"] == 0:
+                    st.warning(
+                        "⚠️ **Limite de Cota do Gemini Atingido:** A sua chave de API gratuita do Gemini "
+                        "excedeu o limite total de uso diário ou mensal permitido pelo Google AI Studio.\n\n"
+                        "**Como resolver:**\n"
+                        "1. Acesse o [Google AI Studio](https://aistudio.google.dev/) e ative o faturamento (Billing) para migrar ao plano Pay-as-you-go (que possui limites muito maiores e uso gratuito generoso sem cobranças se mantido no uso padrão).\n"
+                        "2. Ou gere uma nova chave de API gratuita em outra conta do Google e a atualize no seu arquivo `.env`.\n"
+                        "3. Enquanto isso, você pode **liquidar manualmente** as apostas da rodada atual utilizando o painel abaixo!"
+                    )
                 
                 with st.expander("Ver logs detalhados do resolvedor", expanded=True):
                     for log_msg in results["logs"]:
