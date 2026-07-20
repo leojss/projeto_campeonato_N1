@@ -87,19 +87,22 @@ class AgentValidadorRegras:
         # --- 3. Seleções ---
         selections = normalized_bet.selections
         if not selections:
-            result.warnings.append("OCR: Nenhuma seleção detectada na imagem. Enviado para revisão.")
+            result.errors.append("Nenhuma seleção detectada na aposta.")
         elif len(selections) > MAX_COMBINED:
-            result.warnings.append(
-                f"OCR: Número de seleções ({len(selections)}) excede o limite de {MAX_COMBINED}. Enviado para revisão."
+            result.errors.append(
+                f"Número de seleções ({len(selections)}) excede o limite de {MAX_COMBINED}."
             )
 
-
-
-        # --- 5. Odd total ---
+        # --- 5. Odd total e individual ---
         if normalized_bet.total_odd is not None and normalized_bet.total_odd < MIN_ODD:
-            result.warnings.append(
-                f"OCR: Odd total {normalized_bet.total_odd:.2f} < mínimo {MIN_ODD:.2f}. Enviado para revisão."
+            result.errors.append(
+                f"Odd total {normalized_bet.total_odd:.2f} é menor que o mínimo de {MIN_ODD:.2f}."
             )
+        for s in selections:
+            if s.odd is not None and s.odd < MIN_ODD:
+                result.errors.append(
+                    f"Seleção '{s.description}' possui Odd {s.odd:.2f} abaixo do mínimo de {MIN_ODD:.2f}."
+                )
 
 
 
@@ -110,8 +113,9 @@ class AgentValidadorRegras:
                 f"({MIN_OCR_CONFIDENCE:.0%}). Aposta enviada para revisão manual."
             )
 
-        # --- 8. Consistência imagem × formulário ---
-        self._check_consistency(normalized_bet, form, result)
+        # --- 8. Avisos de normalização ---
+        for warning in normalized_bet.normalization_warnings:
+            result.warnings.append(f"OCR: {warning}")
 
         # --- Determina status final ---
         if result.errors:
@@ -123,28 +127,3 @@ class AgentValidadorRegras:
             result.status = "approved"
 
         return result
-
-    def _check_consistency(
-        self,
-        normalized_bet: NormalizedBet,
-        form_data: dict,
-        result: ValidationResult,
-    ) -> None:
-        """
-        Verifica consistência entre os dados da imagem e os dados informados no formulário.
-        Gera warnings (não rejeita automaticamente) para revisão humana.
-        """
-        # Compara stake_value se ambos disponíveis
-        form_stake = form_data.get("stake_value")
-        img_stake = normalized_bet.stake_value
-        if form_stake and img_stake:
-            diff = abs(float(form_stake) - float(img_stake))
-            if diff > 0.01:  # tolerância de R$ 0,01
-                result.warnings.append(
-                    f"Inconsistência: valor informado R$ {float(form_stake):.2f} ≠ "
-                    f"valor na imagem R$ {float(img_stake):.2f}."
-                )
-
-        # Avisa sobre warnings de normalização
-        for warning in normalized_bet.normalization_warnings:
-            result.warnings.append(f"OCR: {warning}")

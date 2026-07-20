@@ -7,7 +7,7 @@ addopts = "-v --tb=short"
 
 [tool.coverage.run]
 source = ["services", "agents", "utils", "repositories", "models"]
-omit = ["tests/*", "ui/*", "*/migrations/*"]
+omit = ["tests/*", "backend/*", "*/migrations/*"]
 
 [tool.coverage.report]
 show_missing = true

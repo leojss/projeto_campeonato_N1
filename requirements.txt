@@ -2,8 +2,12 @@
 # Python 3.11+
 
 # --- Core ---
-streamlit>=1.35.0
 python-dotenv>=1.0.0
+
+# --- API (backend/frontend HTML/CSS/JS) ---
+fastapi>=0.116.0
+uvicorn[standard]>=0.35.0
+python-multipart>=0.0.20
 
 # --- Supabase ---
 supabase>=2.4.0
@@ -12,6 +16,7 @@ storage3>=0.7.0
 
 # --- IA / Vision ---
 google-generativeai>=0.7.0
+google-genai>=1.0.0
 pillow>=10.3.0
 
 # --- Validação de arquivos ---

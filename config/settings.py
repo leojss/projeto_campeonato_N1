@@ -31,7 +31,7 @@ if not SUPABASE_URL or not SUPABASE_ANON_KEY:
 # ============================================================
 AI_PROVIDER: str = os.environ.get("AI_PROVIDER", "gemini")
 GEMINI_API_KEY: str = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL: str = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+GEMINI_MODEL: str = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
 # Confiança mínima da IA para aprovar aposta automaticamente (0.0–1.0)
 MIN_OCR_CONFIDENCE: float = float(os.environ.get("MIN_OCR_CONFIDENCE", "0.75"))

@@ -32,38 +32,37 @@ class ImageReadingResult:
 
 
 # Prompt estruturado para extração de dados de apostas
+# Foco enxuto: apenas o que o sistema realmente usa (odd total, a aposta
+# descrita por extenso e a confiança da leitura). Valor apostado, retorno
+# potencial e a quebra em seleções individuais não são necessários.
 _EXTRACTION_PROMPT = textwrap.dedent("""
-    Você é um especialista em leitura de comprovantes de apostas esportivas.
-    Analise a imagem fornecida e extraia todas as informações disponíveis sobre a aposta.
+    Você é um especialista em leitura e análise de comprovantes de apostas esportivas.
+    Analise a imagem fornecida e extraia as informações essenciais da aposta em formato estruturado.
 
-    Retorne SOMENTE um JSON válido com a seguinte estrutura (sem markdown, sem explicações):
+    Retorne SOMENTE um JSON válido com a seguinte estrutura (sem markdown ```json, sem explicações):
     {
-        "data_aposta": "YYYY-MM-DD ou null",
-        "valor_apostado": número ou null,
+        "odd_total": número ou null,
+        "aposta_descricao": "descrição completa em texto corrido com todas as seleções separadas por ponto e vírgula",
+        "confianca": número de 0.0 a 1.0 indicando sua confiança na leitura,
         "selecoes": [
             {
-                "descricao": "descrição do evento/seleção",
-                "odd": número,
-                "evento": "nome do evento ou null",
-                "resultado": "pendente|ganhou|perdeu|anulada ou null"
+                "event_name": "Nome do Jogo ou Evento (ex: Kalmar FF x Malmö FF)",
+                "home_team": "Time Mandante ou null",
+                "away_team": "Time Visitante ou null",
+                "market": "gols | escanteios | cartoes | vencedor | ambos_marcam | outros",
+                "type": "over | under | home_win | away_win | draw | yes | no | custom",
+                "line": número da linha (ex: 1.5, 8.5) ou null,
+                "odd": número da odd desta seleção ou null,
+                "description": "Descrição clara do palpite desta seleção"
             }
-        ],
-        "odd_total": número ou null,
-        "retorno_potencial": número ou null,
-        "bookmaker": "nome da casa de apostas ou null",
-        "observacoes": "outras informações relevantes ou null",
-        "confianca": número de 0.0 a 1.0 indicando sua confiança na leitura
+        ]
     }
 
     Regras importantes:
-    - odds devem usar ponto (.) como separador decimal
-    - Se não conseguir ler algum campo com clareza, use null
-    - "confianca" deve refletir a qualidade geral da leitura (1.0 = perfeita, 0.0 = ilegível)
-    - Se a imagem não for um comprovante de aposta, use confianca = 0.0
-    - **Identificação meticulosa de Múltiplas Seleções (Apostas Combinadas/Múltiplas)**:
-      Se o comprovante contiver mais de um evento esportivo (ex: Dupla, Tripla ou Múltipla com jogos diferentes e linhas de odds separadas), você DEVE extrair e listar cada jogo/evento individualmente como um item separado na lista "selecoes". Leia e liste todas as seleções presentes com extrema precisão, garantindo que o número de itens em "selecoes" corresponda exatamente à quantidade de palpites independentes no comprovante.
-    - **Tratamento de blocos de 'Criar Aposta' / 'Bet Builder' (comum na Betano e Bet365)**:
-      Se o comprovante tiver um bloco agrupado do tipo 'Criar Aposta', esse bloco inteiro representa uma única seleção na aposta principal. A odd dessa seleção é a odd geral desse bloco (ex: a odd de 2.07 do grupo, e não as sub-odds ou sub-itens internos). A descrição da seleção deve ser o resumo dos palpites do grupo (ex: 'Criar Aposta: Argentina v Cabo Verde (Mais de 1.5 Gols, Menos de 7.5 Escanteios...)'). NÃO divida os sub-palpites do bloco em seleções separadas no JSON. Trate o grupo inteiro como uma única tip da aposta múltipla.
+    - "odd_total" deve usar ponto (.) como separador decimal.
+    - "selecoes" deve conter a lista individualizada de cada palpite/jogo presente na imagem.
+    - Se houver blocos agrupados tipo 'Criar Aposta' / 'Bet Builder', descreva as pernas do grupo ou crie uma seleção com o resumo dos palpites.
+    - "confianca" deve refletir a qualidade da leitura (1.0 = perfeita, 0.0 = ilegível).
 """).strip()
 
 

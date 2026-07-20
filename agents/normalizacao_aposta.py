@@ -6,7 +6,7 @@ Converte a saída bruta da leitura da imagem em estrutura padronizada de aposta.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, date
+from datetime import date
 from typing import Optional
 
 from models.bet import BetSelection
@@ -17,11 +17,9 @@ from agents.leitura_imagem import ImageReadingResult
 class NormalizedBet:
     """Aposta normalizada pronta para validação e persistência."""
     target_date: Optional[date] = None
-    stake_value: Optional[float] = None
     total_odd: Optional[float] = None
+    aposta_descricao: Optional[str] = None
     selections: list[BetSelection] = None
-    bookmaker: Optional[str] = None
-    observacoes: Optional[str] = None
     ocr_confidence: float = 0.0
     normalization_warnings: list[str] = None
 
@@ -47,7 +45,7 @@ class AgentNormalizacaoAposta:
 
         Args:
             reading_result: Resultado da leitura pelo AgentLeituraImagem.
-            metadata: Dados informados pelo usuário (target_date, stake_value, etc.)
+            metadata: Dados informados no formulário (target_date).
 
         Returns:
             NormalizedBet com campos normalizados e warnings de inconsistência.
@@ -56,20 +54,8 @@ class AgentNormalizacaoAposta:
         ocr = reading_result.ocr_json or {}
         meta = metadata or {}
 
-        # --- Data da aposta ---
-        normalized.target_date = self._normalize_date(
-            ocr.get("data_aposta"),
-            meta.get("target_date"),
-            normalized.normalization_warnings,
-        )
-
-        # --- Valor apostado ---
-        normalized.stake_value = self._normalize_float(
-            ocr.get("valor_apostado"),
-            meta.get("stake_value"),
-            "valor apostado",
-            normalized.normalization_warnings,
-        )
+        # --- Data da aposta: sempre informada pelo formulário ---
+        normalized.target_date = meta.get("target_date")
 
         # --- Odd total ---
         normalized.total_odd = self._normalize_odd(
@@ -77,98 +63,58 @@ class AgentNormalizacaoAposta:
             normalized.normalization_warnings,
         )
 
-        # --- Seleções ---
-        normalized.selections = self._normalize_selections(
-            ocr.get("selecoes", []),
-            normalized.normalization_warnings,
+        # --- Descrição da aposta, escrita pela IA ---
+        descricao = (
+            ocr.get("aposta_descricao")
+            or ocr.get("descricao")
+            or ocr.get("description")
+            or ocr.get("palpite")
         )
+        if not descricao and reading_result.raw_text:
+            cleaned = reading_result.raw_text.strip()
+            if cleaned and not cleaned.startswith("{"):
+                descricao = cleaned[:300]
 
-        # Distribuição Geométrica de Odds: se as odds das seleções vierem nulas (ex: Bet Builder),
-        # mas temos a odd total, calcula a raiz enésima para que o produto delas bata com a odd total
-        if normalized.selections:
-            n_selections = len(normalized.selections)
-            has_missing_odds = any(sel.odd is None for sel in normalized.selections)
-            
-            if has_missing_odds:
-                if normalized.total_odd and normalized.total_odd >= 1.0:
-                    # Calcula a raiz enésima da odd total
-                    nth_root_odd = round(normalized.total_odd ** (1 / n_selections), 4)
-                    for sel in normalized.selections:
-                        if sel.odd is None:
-                            sel.odd = nth_root_odd
-                else:
-                    # Fallback clássico caso não tenhamos a odd total
-                    for sel in normalized.selections:
-                        if sel.odd is None:
-                            sel.odd = 1.50
-            else:
-                # Garante que as odds sejam floats válidas
-                for sel in normalized.selections:
-                    sel.odd = float(sel.odd)
+        if descricao and str(descricao).strip() != "None":
+            normalized.aposta_descricao = str(descricao).strip()
+        else:
+            normalized.aposta_descricao = "Comprovante enviado (Aguardando revisão manual)"
+            normalized.normalization_warnings.append("OCR: Não foi possível identificar a descrição da aposta na imagem. Enviado para revisão manual.")
 
-        # --- Metadados extras ---
-        normalized.bookmaker = ocr.get("bookmaker")
-        normalized.observacoes = ocr.get("observacoes")
+        # --- Seleções individuais ou agrupadas ---
+        ocr_selecoes = ocr.get("selecoes")
+        selections_list = []
+        if isinstance(ocr_selecoes, list) and len(ocr_selecoes) > 0:
+            for idx, sel_dict in enumerate(ocr_selecoes, 1):
+                if isinstance(sel_dict, dict):
+                    desc = sel_dict.get("description") or sel_dict.get("event_name") or "Seleção"
+                    event = sel_dict.get("event_name")
+                    odd_val = self._normalize_odd(sel_dict.get("odd"), [])
+                    selections_list.append(BetSelection(
+                        selection_order=idx,
+                        description=str(desc).strip(),
+                        event_name=str(event).strip() if event else None,
+                        odd=odd_val or (normalized.total_odd if normalized.total_odd else 1.50),
+                        result_status="pending",
+                    ))
 
+        if not selections_list:
+            selections_list = [BetSelection(
+                selection_order=1,
+                description=normalized.aposta_descricao,
+                odd=normalized.total_odd if normalized.total_odd else 1.50,
+                result_status="pending",
+            )]
+
+        normalized.selections = selections_list
         return normalized
-
-    def _normalize_date(
-        self,
-        ocr_date: Optional[str],
-        meta_date,
-        warnings: list[str],
-    ) -> Optional[date]:
-        """Normaliza a data, priorizando o metadado informado pelo usuário."""
-        # Prioridade: o usuário informou a data no formulário
-        if meta_date:
-            if isinstance(meta_date, date):
-                return meta_date
-            if isinstance(meta_date, str):
-                try:
-                    return date.fromisoformat(meta_date)
-                except ValueError:
-                    pass
-
-        # Fallback: data extraída da imagem
-        if ocr_date:
-            try:
-                return date.fromisoformat(str(ocr_date))
-            except (ValueError, TypeError):
-                warnings.append(f"Data extraída pelo OCR inválida: '{ocr_date}'")
-
-        warnings.append("Data da aposta não encontrada na imagem nem nos metadados.")
-        return None
-
-    def _normalize_float(
-        self,
-        ocr_value,
-        meta_value,
-        field_name: str,
-        warnings: list[str],
-    ) -> Optional[float]:
-        """Normaliza um valor numérico, priorizando metadado."""
-        # Usa o valor do formulário se disponível
-        if meta_value is not None:
-            try:
-                return float(meta_value)
-            except (ValueError, TypeError):
-                pass
-
-        # Fallback: valor da imagem
-        if ocr_value is not None:
-            try:
-                return float(str(ocr_value).replace(",", "."))
-            except (ValueError, TypeError):
-                warnings.append(f"Valor inválido para '{field_name}': {ocr_value}")
-
-        return None
 
     def _normalize_odd(
         self,
         ocr_odd,
         warnings: list[str],
     ) -> Optional[float]:
-        """Normaliza odd total da imagem."""
+        """Normaliza a odd total extraída da imagem."""
         if ocr_odd is None:
             return None
         try:
@@ -179,37 +125,3 @@ class AgentNormalizacaoAposta:
         except (ValueError, TypeError):
             warnings.append(f"Odd total inválida na imagem: {ocr_odd}")
             return None
-
-    def _normalize_selections(
-        self,
-        ocr_selections: list,
-        warnings: list[str],
-    ) -> list[BetSelection]:
-        """Normaliza as seleções extraídas da imagem."""
-        selections = []
-
-        for i, sel_data in enumerate(ocr_selections[:3], 1):  # Máx 3
-            if not isinstance(sel_data, dict):
-                continue
-
-            odd_raw = sel_data.get("odd")
-            odd = None
-            if odd_raw is not None:
-                try:
-                    odd = float(str(odd_raw).replace(",", "."))
-                except (ValueError, TypeError):
-                    warnings.append(f"Seleção {i}: odd inválida '{odd_raw}' na imagem")
-
-            selection = BetSelection(
-                selection_order=i,
-                description=str(sel_data.get("descricao", f"Seleção {i}"))[:500],
-                odd=round(odd, 4) if odd is not None else None,
-                event_name=sel_data.get("evento"),
-                result_status="pending",
-            )
-            selections.append(selection)
-
-        if not selections:
-            warnings.append("Nenhuma seleção encontrada na imagem.")
-
-        return selections

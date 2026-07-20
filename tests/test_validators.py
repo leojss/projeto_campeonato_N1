@@ -7,9 +7,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from unittest.mock import patch
 
-import pytest
-
-from agents.validador_regras import AgentValidadorRegras, ValidationResult
+from agents.validador_regras import AgentValidadorRegras
 from agents.normalizacao_aposta import NormalizedBet
 from models.bet import BetSelection
 
@@ -25,15 +23,14 @@ def _future_date() -> date:
 def _make_normalized(
     selections=None,
     confidence: float = 0.90,
-    stake: float = 50.0,
     target_date=None,
 ) -> NormalizedBet:
     if selections is None:
         selections = [_make_selection()]
     return NormalizedBet(
         target_date=target_date or _future_date(),
-        stake_value=stake,
         total_odd=2.0,
+        aposta_descricao="Seleção teste",
         selections=selections,
         ocr_confidence=confidence,
     )
@@ -41,7 +38,7 @@ def _make_normalized(
 
 class TestAgentValidadorRegras:
     agent = AgentValidadorRegras()
-    COMPETITOR_ID = "test-comp-uuid"
+    COMPETITOR_ID = "00000000-0000-0000-0000-000000000001"
 
     @patch("agents.validador_regras.BetRepository.count_bets_today", return_value=0)
     @patch("agents.validador_regras.is_deadline_passed", return_value=False)
@@ -89,14 +86,6 @@ class TestAgentValidadorRegras:
         result = self.agent.validate(normalized, self.COMPETITOR_ID)
         assert result.needs_review
         assert any("Confiança" in w for w in result.warnings)
-
-    @patch("agents.validador_regras.BetRepository.count_bets_today", return_value=0)
-    @patch("agents.validador_regras.is_deadline_passed", return_value=False)
-    def test_stake_inconsistency_generates_warning(self, mock_dl, mock_count):
-        normalized = _make_normalized(stake=50.0)
-        form_data = {"stake_value": 100.0}  # Diferente do OCR
-        result = self.agent.validate(normalized, self.COMPETITOR_ID, form_data=form_data)
-        assert any("Inconsistência" in w for w in result.warnings)
 
     @patch("agents.validador_regras.BetRepository.count_bets_today", return_value=0)
     @patch("agents.validador_regras.is_deadline_passed", return_value=False)

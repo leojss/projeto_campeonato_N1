@@ -1,6 +1,6 @@
 # Web App Controle de Apostas N1
 
-Sistema de controle de apostas para competição interna, construído com **Streamlit + Supabase + Gemini Vision**.
+Sistema de controle de apostas para competição interna, construído com **FastAPI + HTML/CSS/JS + Supabase + Gemini Vision**.
 
 ---
 
@@ -60,10 +60,10 @@ VALUES ('UUID-AQUI', 'Administrador', 'admin@email.com', 'admin');
 
 ### 5. Executar a aplicação
 ```bash
-streamlit run app.py
+uvicorn backend.main:app --reload
 ```
 
-Acesse em: `http://localhost:8501`
+Acesse em: `http://localhost:8000`
 
 ---
 
@@ -82,7 +82,18 @@ pytest tests/ --cov=. --cov-report=term-missing
 ## 🏗️ Estrutura do Projeto
 
 ```
-app.py                    ← Ponto de entrada
+backend/                  ← API FastAPI (ponto de entrada: backend/main.py)
+  main.py                 ← Monta rotas /api/* e serve frontend/ como estático
+  security.py             ← Validação do Bearer token (Supabase JWT)
+  routers/
+    auth.py / competitors.py / rounds.py / bets.py / admin.py
+frontend/                 ← SPA em HTML/CSS/JS puro
+  index.html
+  css/                    ← theme.css / components.css
+  js/
+    api.js / router.js / sidebar.js / format.js / app.js
+    pages/
+      login.js / competidores.js / apostas.js / admin.js
 .env.example              ← Template de configuração
 requirements.txt
 pyproject.toml            ← Configuração do pytest
@@ -112,9 +123,6 @@ repositories/
   bet_repository.py / image_repository.py
   round_repository.py / competitor_repository.py
   audit_repository.py / settlement_repository.py
-ui/
-  login.py / dashboard.py / apostas.py
-  competidores.py / rodada.py / admin.py
 tests/
   test_bet_service.py / test_upload_service.py
   test_validators.py / test_ranking_service.py / test_round_service.py
@@ -156,3 +164,33 @@ Upload → Storage → AgentLeituraImagem (Gemini Vision)
 ```
 
 Se confiança < 75%: aposta vai para **revisão manual** (admin).
+
+---
+
+## 🌐 Deploy em Produção
+
+### Opção 1: Render / Railway / Heroku (via Procfile)
+1. Conecte seu repositório no [Render](https://render.com) ou [Railway](https://railway.app).
+2. Escolha o ambiente **Python 3.11+**.
+3. O serviço detectará automaticamente o arquivo `Procfile`:
+   ```bash
+   web: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+   ```
+4. Configure as variáveis de ambiente no painel:
+   - `SUPABASE_URL`
+   - `SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `GEMINI_API_KEY`
+   - `GEMINI_MODEL=gemini-2.5-flash`
+   - `TIMEZONE=America/Sao_Paulo`
+
+### Opção 2: Docker / Container
+```bash
+# Build da imagem
+docker build -t campeonato-n1 .
+
+# Execução do container
+docker run -d -p 8000:8000 --env-file .env campeonato-n1
+```
+Acesse em: `http://localhost:8000`
+

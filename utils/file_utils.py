@@ -53,9 +53,9 @@ def validate_image_file(file_content: bytes, filename: str, mime_type: str | Non
 
     # 3. Valida magic bytes (primeiros bytes do arquivo)
     detected_mime = _detect_mime_from_bytes(file_content)
-    if detected_mime and detected_mime not in ALLOWED_MIME_TYPES:
+    if detected_mime is None or detected_mime not in ALLOWED_MIME_TYPES:
         raise FileValidationError(
-            f"Tipo de arquivo detectado '{detected_mime}' não é uma imagem permitida. "
+            f"O arquivo enviado não é uma imagem permitida. "
             f"Tipos aceitos: {', '.join(ALLOWED_MIME_TYPES)}"
         )
 
@@ -109,16 +109,3 @@ def generate_storage_path(competitor_id: str, bet_id: str, filename: str) -> str
     _, ext = os.path.splitext(filename.lower())
     unique_name = f"{uuid.uuid4().hex}{ext}"
     return f"{competitor_id}/{bet_id}/{unique_name}"
-
-
-def read_streamlit_file(uploaded_file) -> tuple[bytes, str, str]:
-    """
-    Lê um arquivo enviado via st.file_uploader do Streamlit.
-
-    Returns:
-        Tupla (content_bytes, filename, mime_type)
-    """
-    content = uploaded_file.read()
-    filename = uploaded_file.name
-    mime_type = getattr(uploaded_file, "type", get_mime_from_extension(filename))
-    return content, filename, mime_type
