@@ -66,7 +66,9 @@ class AgentLiquidador:
             - Odd cadastrada: {selection.odd}
 
             Instruções:
-            1. Use sua ferramenta de pesquisa (Google Search) para descobrir as estatísticas e o resultado real da partida (placar final, escanteios, gols, cartões, chutes a gol ou qualquer dado relevante que o palpite exija).
+            1. Use sua ferramenta de pesquisa (Google Search) para descobrir as estatísticas e o resultado real da partida (placar final, escanteios, gols, cartões, chutes a gol, resultado do 1º tempo, ou qualquer dado relevante que o palpite exija).
+               - Priorize o site flashscore.com.br como fonte principal — ele traz placar, estatísticas completas (gols, escanteios, cartões, chutes) e o resultado por tempo (1º/2º tempo) de forma estruturada e confiável. Faça uma busca como "site:flashscore.com.br {selection.event_name or selection.description}" para localizar a página exata da partida, e abra a aba de estatísticas quando o mercado exigir dado além do placar (ex: escanteios, cartões, chutes a gol).
+               - Se a partida não for encontrada no Flashscore (liga muito regional, jogo amistoso não coberto, etc.), use como alternativa sofascore.com, ge.globo.com/futebol, ou o site oficial da competição/liga.
             2. Analise friamente se o palpite (ex: "Mais de 1.5 gols", "Resultado final: Argentina", "Menos de 7.5 escanteios 1T") foi cumprido.
             3. Responda estritamente sob as regras das apostas esportivas tradicionais.
             
